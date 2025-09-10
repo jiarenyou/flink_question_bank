@@ -1,0 +1,5 @@
+{
+  "name": "Flink 面试练习",
+  "description": "一个交互式的 Web 应用程序，旨在帮助用户准备 Apache Flink 技术面试。它提供了多种选择题和问答题，并附有详细的解释和知识扩展，以加深理解。",
+  "requestFramePermissions": []
+}
