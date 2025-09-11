@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
 import type { Question } from '../types';
 import { QuestionType, Level } from '../types';
+import { GoogleGenAI } from "@google/genai";
 
 interface QuestionCardProps {
   question: Question;
@@ -31,6 +31,10 @@ const LevelBadge: React.FC<{ level: Level }> = ({ level }) => {
 const QuestionCard: React.FC<QuestionCardProps> = ({ question, onAnswer, onNext, isLastQuestion }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isAnswered, setIsAnswered] = useState<boolean>(false);
+  const [followUpQuestion, setFollowUpQuestion] = useState<string>('');
+  const [geminiResponse, setGeminiResponse] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleOptionClick = (option: string) => {
     if (isAnswered) return;
@@ -45,6 +49,50 @@ const QuestionCard: React.FC<QuestionCardProps> = ({ question, onAnswer, onNext,
     if (isAnswered) return;
     setIsAnswered(true);
     // For QA, correctness is not auto-graded
+  };
+
+  const handleFollowUpSubmit = async () => {
+    if (!followUpQuestion.trim()) return;
+
+    setIsLoading(true);
+    setError(null);
+    setGeminiResponse('');
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+      
+      const prompt = `
+        您是一位 Apache Flink 架构师和技术面试官专家。一位用户正在练习以下面试题：
+
+        **原始问题:**
+        ${question.question}
+
+        **正确答案 / 参考答案:**
+        ${question.correct_answer}
+
+        **提供的解释:**
+        ${question.explanation}
+
+        用户有以下后续问题或想法：
+        **用户的问题:**
+        ${followUpQuestion}
+
+        请用中文为用户的问题提供清晰、简洁、有帮助的回答。帮助他们更好地理解相关概念。
+      `;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
+
+      setGeminiResponse(response.text);
+
+    } catch (err) {
+      console.error('Error calling Gemini API:', err);
+      setError('抱歉，回答时出现问题，请稍后再试。');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getOptionClass = (option: string) => {
@@ -127,6 +175,45 @@ const QuestionCard: React.FC<QuestionCardProps> = ({ question, onAnswer, onNext,
           <div>
             <h3 className="text-md font-bold text-slate-700 dark:text-slate-200 mb-2">知识扩展</h3>
             <p className="p-4 bg-blue-50 dark:bg-blue-900/50 rounded-lg text-slate-800 dark:text-slate-300">{question.extension}</p>
+          </div>
+          
+          <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <h3 className="text-md font-bold text-slate-700 dark:text-slate-200 mb-3">还有其他疑问吗？</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              对于这个问题或相关概念，如果你有自己的想法或疑问，可以在下方提出，AI 专家会为你解答。
+            </p>
+            <div className="flex flex-col items-start">
+              <textarea
+                rows={4}
+                value={followUpQuestion}
+                onChange={(e) => setFollowUpQuestion(e.target.value)}
+                className="w-full p-3 border rounded-lg bg-slate-50 dark:bg-slate-700 border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="例如：你能举一个关于“迟到事件”在真实世界中的例子吗？"
+                disabled={isLoading}
+              />
+              <button
+                onClick={handleFollowUpSubmit}
+                disabled={isLoading || !followUpQuestion.trim()}
+                className="mt-4 px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
+              >
+                {isLoading ? '正在思考中...' : '提交问题'}
+              </button>
+            </div>
+
+            {error && (
+              <div className="mt-4 p-4 bg-red-100 dark:bg-red-900/50 rounded-lg text-red-700 dark:text-red-300">
+                {error}
+              </div>
+            )}
+            
+            {geminiResponse && (
+              <div className="mt-4">
+                <h4 className="text-md font-bold text-slate-700 dark:text-slate-200 mb-2">AI 专家解答</h4>
+                <div className="p-4 bg-slate-100 dark:bg-slate-700/50 rounded-lg text-slate-800 dark:text-slate-300 whitespace-pre-wrap font-sans">
+                  {geminiResponse}
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="text-right">
